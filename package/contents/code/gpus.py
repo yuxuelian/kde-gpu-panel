@@ -3,6 +3,32 @@ from pathlib import Path
 import re
 import shutil
 import subprocess
+import time
+
+
+def intel_clients(devices):
+    clients = {key: {} for key in devices}
+    for path in Path('/proc').glob('[0-9]*/fdinfo/*'):
+        try:
+            fields = dict(line.split(':', 1) for line in path.read_text().splitlines()
+                          if line.startswith('drm-') and ':' in line)
+        except (OSError, UnicodeError):
+            continue
+        key = fields.get('drm-pdev', '').strip()
+        client = fields.get('drm-client-id', '').strip()
+        if key not in clients or not client or client in clients[key]:
+            continue
+        def value(name):
+            parts = fields.get(name, '').split()
+            if not parts:
+                return None
+            n = number(parts[0])
+            return None if n is None else n * {'KiB': 1024, 'MiB': 1024**2}.get(parts[-1], 1)
+        resident = [value(name) for name in fields
+                    if re.fullmatch(r'drm-resident-(?:stolen-)?system\d*', name)]
+        resident = [n for n in resident if n is not None]
+        clients[key][client] = (value('drm-engine-render'), sum(resident) if resident else None)
+    return clients
 
 
 def number(text):
@@ -25,6 +51,7 @@ def to_mib(value):
 
 def collect():
     cards = {}
+    intel = set()
     smi = shutil.which('nvidia-smi')
     if smi:
         try:
@@ -47,12 +74,26 @@ def collect():
         if not device.exists():
             continue
         key = device.resolve().name.lower()
+        if (device / 'driver').resolve().name == 'i915':
+            intel.add(key)
         cards.setdefault(key, [
             read_int(device / 'gpu_busy_percent'),
             to_mib(read_int(device / 'mem_info_vram_used')),
             to_mib(read_int(device / 'mem_info_vram_total')),
         ])
-    return [{'id': key, 'metrics': values} for key, values in sorted(cards.items())]
+    sample_time = time.monotonic_ns()
+    clients = intel_clients(intel) if intel else {}
+    rows = []
+    for key, metrics in sorted(cards.items()):
+        row = {'id': key, 'metrics': metrics}
+        if key in intel:
+            entries = clients[key]
+            resident = [mem for _, mem in entries.values() if mem is not None]
+            row.update(shared=True, timestamp=sample_time,
+                       engines={client: ns for client, (ns, _) in entries.items() if ns is not None},
+                       metrics=[None, to_mib(sum(resident)) if resident else None, None])
+        rows.append(row)
+    return rows
 
 
 if __name__ == '__main__':

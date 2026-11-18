@@ -2,16 +2,26 @@ import QtQuick
 import QtQuick.Layouts
 import org.kde.plasma.plasmoid
 import org.kde.plasma.components as PlasmaComponents
-import org.kde.plasma.plasma5support as Plasma5Support
 
 PlasmoidItem {
     id: root
-    property string summary: "GPU…"
-    readonly property string collector: decodeURIComponent(Qt.resolvedUrl("../code/gpus.py").toString().replace(/^file:\/\/\//, "/"))
-    readonly property string command: "python3 '" + collector.split("'").join("'\\''") + "'"
     preferredRepresentation: fullRepresentation
     toolTipMainText: "GPU 面板监视器"
-    toolTipSubText: "核心使用率 / 已用显存 / 总显存；— 表示驱动未提供数据"
+    toolTipSubText: "核心使用率 / 已用显存 / 总显存；~ 为可见客户端估算，— 为无数据"
+    readonly property string summary: {
+        if (sampler.loading) return "GPU…"
+        if (sampler.failed) return "GPU 读取失败"
+        if (sampler.cards.length === 0) return "未检测到 GPU"
+        const hidden = Plasmoid.configuration.hiddenGpuIds.split(",")
+        return sampler.cards.map((gpu, index) => {
+            if (hidden.includes(gpu.id)) return ""
+            const m = gpu.metrics
+            const prefix = gpu.shared ? "~" : ""
+            return "GPU" + index + "[" + (m[0] === null ? "—" : prefix + m[0] + "%")
+                + "/" + (m[1] === null ? "—" : prefix + root.memory(m[1]))
+                + "/" + (gpu.shared ? "共享" : root.memory(m[2])) + "]"
+        }).filter(text => text !== "").join("  ") || "GPU 已隐藏"
+    }
 
     function memory(mib) {
         if (mib === null) return "—"
@@ -20,40 +30,14 @@ PlasmoidItem {
         return Number((mib / 1024).toFixed(1)) + "G"
     }
 
-    function refresh() {
-        if (runner.connectedSources.length === 0)
-            runner.connectSource(root.command)
-    }
-
-    Plasma5Support.DataSource {
-        id: runner
-        engine: "executable"
-        onNewData: (source, data) => {
-            runner.disconnectSource(source)
-            if (data["exit code"] !== 0) {
-                root.summary = "GPU 读取失败"
-                return
-            }
-            try {
-                const cards = JSON.parse(data.stdout)
-                root.summary = cards.map((card, index) => {
-                    const m = card.metrics
-                    return "GPU" + index + "[" + (m[0] === null ? "—" : m[0] + "%")
-                        + "/" + root.memory(m[1]) + "/" + root.memory(m[2]) + "]"
-                }).join("  ") || "未检测到 GPU"
-            } catch (error) {
-                root.summary = "GPU 读取失败"
-                console.warn("GPU panel:", error)
-            }
-        }
-    }
+    GpuSampler { id: sampler }
 
     Timer {
         interval: 2000
         running: true
         repeat: true
         triggeredOnStart: true
-        onTriggered: root.refresh()
+        onTriggered: sampler.refresh()
     }
 
     fullRepresentation: PlasmaComponents.Label {
