@@ -7,6 +7,24 @@ Kirigami.FormLayout {
     id: page
     property string cfg_hiddenGpuIds: ""
     property string cfg_hiddenGpuIdsDefault: ""
+    property int cfg_refreshSeconds: 2
+    property int cfg_refreshSecondsDefault: 2
+
+    Controls.ComboBox {
+        id: refreshMenu
+        Kirigami.FormData.label: "刷新间隔："
+        model: [1, 2, 5, 10]
+        currentIndex: Math.max(0, model.indexOf(page.cfg_refreshSeconds))
+        displayText: currentText + " 秒"
+        delegate: Controls.ItemDelegate {
+            required property int modelData
+            required property int index
+            width: refreshMenu.width
+            text: modelData + " 秒"
+            highlighted: refreshMenu.highlightedIndex === index
+        }
+        onActivated: index => page.cfg_refreshSeconds = model[index]
+    }
 
     GpuSampler {
         id: sampler
