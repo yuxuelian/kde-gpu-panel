@@ -7,7 +7,7 @@ PlasmoidItem {
     id: root
     preferredRepresentation: fullRepresentation
     toolTipMainText: "GPU 面板监视器"
-    toolTipSubText: "核心使用率 / 已用显存 / 总显存；Intel 核显使用率和已用内存为估算值；— 为无数据"
+    toolTipSubText: "核心使用率 / 已用显存 / 总显存 / GPU 温度；Intel 核显使用率和已用内存为估算值；— 为无数据"
     readonly property string summary: {
         if (sampler.loading) return "GPU…"
         if (sampler.failed) return "GPU 读取失败"
@@ -18,7 +18,8 @@ PlasmoidItem {
             const m = gpu.metrics
             return "GPU" + index + "[" + (m[0] === null ? "—" : m[0] + "%")
                 + "/" + root.memory(m[1])
-                + "/" + (gpu.shared ? "共享" : root.memory(m[2])) + "]"
+                + "/" + (gpu.shared ? "共享" : root.memory(m[2]))
+                + "/" + (gpu.temperature === null ? "—" : gpu.temperature + "°C") + "]"
         }).filter(text => text !== "").join("  ") || "GPU 已隐藏"
     }
 

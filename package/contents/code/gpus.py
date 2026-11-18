@@ -49,22 +49,43 @@ def to_mib(value):
     return None if value is None else value / (1024 ** 2)
 
 
+def gpu_temperature(device):
+    # Only use sensors attached to this GPU, not CPU/package sensors.
+    for hwmon in sorted((device / 'hwmon').glob('hwmon*')):
+        sensor = hwmon / 'temp1_input'
+        for label in sorted(hwmon.glob('temp*_label')):
+            try:
+                kind = label.read_text().strip().lower()
+            except OSError:
+                continue
+            if kind in {'edge', 'gpu'}:
+                sensor = label.with_name(label.name.replace('_label', '_input'))
+                break
+        value = read_int(sensor)
+        if value is not None:
+            return round(value / 1000)
+    return None
+
+
 def collect():
     cards = {}
+    temperatures = {}
     intel = set()
     smi = shutil.which('nvidia-smi')
     if smi:
         try:
             output = subprocess.check_output([
-                smi, '--query-gpu=pci.bus_id,utilization.gpu,memory.used,memory.total',
+                smi, '--query-gpu=pci.bus_id,utilization.gpu,memory.used,memory.total,temperature.gpu',
                 '--format=csv,noheader,nounits'
             ], timeout=2, stderr=subprocess.DEVNULL, text=True)
         except (OSError, subprocess.SubprocessError):
             output = ''
         for line in output.splitlines():
             fields = [field.strip() for field in line.split(',')]
-            if len(fields) == 4:
-                cards[fields[0].lower()[-12:]] = list(map(number, fields[1:]))
+            if len(fields) == 5:
+                key = fields[0].lower()[-12:]
+                cards[key] = list(map(number, fields[1:4]))
+                temperatures[key] = number(fields[4])
 
     # Include DRM GPUs even if their driver does not expose these counters.
     for card in Path('/sys/class/drm').glob('card*'):
@@ -74,6 +95,8 @@ def collect():
         if not device.exists():
             continue
         key = device.resolve().name.lower()
+        if temperatures.get(key) is None:
+            temperatures[key] = gpu_temperature(device)
         if (device / 'driver').resolve().name == 'i915':
             intel.add(key)
         cards.setdefault(key, [
@@ -85,7 +108,7 @@ def collect():
     clients = intel_clients(intel) if intel else {}
     rows = []
     for key, metrics in sorted(cards.items()):
-        row = {'id': key, 'metrics': metrics}
+        row = {'id': key, 'metrics': metrics, 'temperature': temperatures.get(key)}
         if key in intel:
             entries = clients[key]
             resident = [mem for _, mem in entries.values() if mem is not None]

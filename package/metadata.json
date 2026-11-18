@@ -2,8 +2,8 @@
   "KPlugin": {
     "Id": "local.gpupanelsummary",
     "Name": "GPU 面板监视器",
-    "Description": "显示所有 GPU 的核心使用率、已用显存和总显存",
-    "Version": "1.2.0",
+    "Description": "显示所有 GPU 的核心使用率、已用显存、总显存和温度",
+    "Version": "1.3.0",
     "License": "MIT",
     "Icon": "video-display"
   },
