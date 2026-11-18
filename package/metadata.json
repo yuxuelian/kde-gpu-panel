@@ -1,0 +1,12 @@
+{
+  "KPlugin": {
+    "Id": "local.gpupanelsummary",
+    "Name": "GPU 面板监视器",
+    "Description": "显示所有 GPU 的核心使用率、已用显存和总显存",
+    "Version": "1.0.0",
+    "License": "MIT",
+    "Icon": "video-display"
+  },
+  "KPackageStructure": "Plasma/Applet",
+  "X-Plasma-API-Minimum-Version": "6.0"
+}
