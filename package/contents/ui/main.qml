@@ -7,7 +7,7 @@ PlasmoidItem {
     id: root
     preferredRepresentation: fullRepresentation
     toolTipMainText: "GPU 面板监视器"
-    toolTipSubText: "核心使用率 / 已用显存 / 总显存 / GPU 温度；Intel 核显使用率和已用内存为估算值；— 为无数据"
+    toolTipSubText: "核心使用率 / 已用显存 / 总显存 / 温度（Intel 核显无独立读数时显示 CPU 封装温度）；Intel 核显使用率和已用内存为估算值；— 为无数据"
     readonly property string summary: {
         if (sampler.loading) return "GPU…"
         if (sampler.failed) return "GPU 读取失败"

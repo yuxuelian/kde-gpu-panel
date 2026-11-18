@@ -67,6 +67,27 @@ def gpu_temperature(device):
     return None
 
 
+def cpu_package_temperature():
+    for hwmon in sorted(Path('/sys/class/hwmon').glob('hwmon*')):
+        try:
+            if (hwmon / 'name').read_text().strip() != 'coretemp':
+                continue
+        except OSError:
+            continue
+        sensor = hwmon / 'temp1_input'
+        for label in sorted(hwmon.glob('temp*_label')):
+            try:
+                if label.read_text().strip() == 'Package id 0':
+                    sensor = label.with_name(label.name.replace('_label', '_input'))
+                    break
+            except OSError:
+                continue
+        value = read_int(sensor)
+        if value is not None:
+            return round(value / 1000)
+    return None
+
+
 def collect():
     cards = {}
     temperatures = {}
@@ -99,6 +120,8 @@ def collect():
             temperatures[key] = gpu_temperature(device)
         if (device / 'driver').resolve().name == 'i915':
             intel.add(key)
+            if temperatures[key] is None:
+                temperatures[key] = cpu_package_temperature()
         cards.setdefault(key, [
             read_int(device / 'gpu_busy_percent'),
             to_mib(read_int(device / 'mem_info_vram_used')),
